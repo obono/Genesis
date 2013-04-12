@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OBN-soft
+ * Copyright (C) 2012, 2013 OBN-soft
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
+import android.os.Build;
 import android.os.Bundle;
 import android.preference.ListPreference;
 import android.preference.Preference;
@@ -82,7 +83,13 @@ public class MyPreferenceActivity extends PreferenceActivity
         if (key.equals("about")) {
             pref.setOnPreferenceClickListener(this);
         } else if (pref instanceof ListPreference) {
-            pref.setSummary(((ListPreference) pref).getEntry());
+            String summary = ((ListPreference) pref).getEntry().toString();
+            if (key.equals("alpha") || key.equals("scale")) {
+                if (Build.VERSION.SDK_INT >= 12/*Build.VERSION_CODES.HONEYCOMB*/) {
+                    summary = summary.concat("%");
+                }
+            }
+            pref.setSummary(summary);
         }
     }
 

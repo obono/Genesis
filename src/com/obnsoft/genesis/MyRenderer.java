@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OBN-soft
+ * Copyright (C) 2012, 2013 OBN-soft
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,9 +40,8 @@ public class MyRenderer {
 
     private static final int BYTES_FLOAT = 4;
 
-    private SurfaceHolder       mHolder;
     private SharedPreferences   mPrefs;
-    
+
     private EGL10       mEGL        = null;
     private EGLContext  mEGLContext = null;
     private EGLDisplay  mEGLDisplay = null;
@@ -50,8 +49,6 @@ public class MyRenderer {
     private EGLConfig   mEGLConfig  = null;
     private GL10        mGL10       = null;
 
-    private int     mWindowWidth    = -1;
-    private int     mWindowHeight   = -1;
     private int     mBufferIndex    = 0;
 
     private int     mLevel;
@@ -65,25 +62,19 @@ public class MyRenderer {
     private float   mRotR;
     private long    mStartTime;
 
-    public void onInitialize(Context context, SurfaceHolder holder) {
-        mHolder = holder;
-        mPrefs = PreferenceManager.getDefaultSharedPreferences(context);
+    public void onStartDrawing(Context context, SurfaceHolder holder) {
         initializeGL();
+        initializeSurface(mGL10, holder);
+        mPrefs = PreferenceManager.getDefaultSharedPreferences(context);
+        initializeObject(mGL10, mPrefs);
     }
 
-    public void onSurfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        mHolder = holder;
-        mWindowWidth = width;
-        mWindowHeight = height;
+    public void onResumeDrawing() {
+        initializeObject(mGL10, mPrefs);
     }
 
-    public void onStartDrawing() {
-        initializeSurface(mHolder);
-        initializeObject(mGL10);
-    }
-
-    public void onDrawFrame() {
-        drawFrame(mGL10);
+    public void onDrawFrame(int width, int height) {
+        drawFrame(mGL10, width, height);
     }
 
     public void onFinishDrawing() {
@@ -130,7 +121,7 @@ public class MyRenderer {
         mGL10 = (GL10) mEGLContext.getGL();
     }
 
-    private void initializeSurface(SurfaceHolder holder) {
+    private void initializeSurface(GL10 gl10, SurfaceHolder holder) {
         myLog("initializeSurface");
 
         /*  Create surface  */
@@ -149,15 +140,6 @@ public class MyRenderer {
             return;
         }
 
-        /*  View port  */
-        GL10 gl10 = mGL10;
-        gl10.glViewport(0, 0, mWindowWidth, mWindowHeight);
-        gl10.glMatrixMode(GL10.GL_PROJECTION);
-        gl10.glLoadIdentity();
-        GLU.gluPerspective(gl10, 45f, (float) mWindowWidth / (float) mWindowHeight, 1f, 100f);
-        GLU.gluLookAt(gl10, 0f, 0f, -32f, 0f, 0f, 0f, 0f, 1f, 0f);
-        gl10.glMatrixMode(GL10.GL_MODELVIEW);
-
         /*  Get buffer index  */
         gl10.glEnableClientState(GL10.GL_VERTEX_ARRAY);
         //gl10.glEnableClientState(GL10.GL_TEXTURE_COORD_ARRAY);
@@ -170,11 +152,11 @@ public class MyRenderer {
         gl10.glEnable(GL10.GL_ALPHA);
     }
 
-    private void initializeObject(GL10 gl10) {
+    private void initializeObject(GL10 gl10, SharedPreferences prefs) {
         myLog("initializeObject");
 
         /*  Parameters  */
-        applyPrefs(mPrefs);
+        applyPrefs(prefs);
         Random random = new Random();
         mRotX = random.nextFloat() * 64f - 32f;
         mRotY = random.nextFloat() * 64f - 32f;
@@ -229,9 +211,17 @@ public class MyRenderer {
         gl10.glClear(GL10.GL_COLOR_BUFFER_BIT);
     }
 
-    private void drawFrame(GL10 gl10) {
+    private void drawFrame(GL10 gl10, int width, int height) {
         /*  Clear  */
         clearFrame(gl10);
+
+        /*  View port  */
+        gl10.glViewport(0, 0, width, height);
+        gl10.glMatrixMode(GL10.GL_PROJECTION);
+        gl10.glLoadIdentity();
+        GLU.gluPerspective(gl10, 45f, (float) width / (float) height, 1f, 100f);
+        GLU.gluLookAt(gl10, 0f, 0f, -32f, 0f, 0f, 0f, 0f, 1f, 0f);
+        gl10.glMatrixMode(GL10.GL_MODELVIEW);
 
         /*  Rotate  */
         float tick = (float) ((System.currentTimeMillis() - mStartTime) / 1000.0);

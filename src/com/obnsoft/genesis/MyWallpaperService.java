@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OBN-soft
+ * Copyright (C) 2012, 2013 OBN-soft
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,8 +34,8 @@ public class MyWallpaperService extends WallpaperService {
     /*-----------------------------------------------------------------------*/
 
     class MyEngine extends Engine {
-        private MyRenderer  mRenderer = null;
-        private MyThread    mThread = null;
+
+        private MyThread mThread = null;
 
         @Override
         public void onCreate(SurfaceHolder holder) {
@@ -50,32 +50,29 @@ public class MyWallpaperService extends WallpaperService {
             myLog("onSurfaceCreated");
             super.onSurfaceCreated(holder);
 
-            if (mRenderer != null) {
-                myLog("Double renderer! Why?");
-                mRenderer.onDispose();
-            }
-            mRenderer = new MyRenderer();
-            mRenderer.onInitialize(getApplicationContext(), holder);
+            mThread = new MyThread(getSurfaceHolder());
+            mThread.start();
         }
 
         @Override
         public void onSurfaceChanged(SurfaceHolder holder, int format, int width, int height) {
             myLog("onSurfaceChanged: " + width + "x" + height);
             super.onSurfaceChanged(holder, format, width, height);
-
-            mRenderer.onSurfaceChanged(holder, format, width, height);
+            if (mThread != null) {
+                mThread.setSize(width, height);
+            }
         }
 
         @Override
         public void onVisibilityChanged(boolean visible) {
             myLog("onVisibilityChanged: " + visible);
             super.onVisibilityChanged(visible);
-            if (visible) {
-                mThread = new MyThread(mRenderer);
-                mThread.start();
-            } else {
-                mThread.pause();
-                mThread = null;
+            if (mThread != null) {
+                if (visible) {
+                    mThread.onResume();
+                } else {
+                    mThread.onPause();
+                }
             }
         }
 
@@ -83,14 +80,9 @@ public class MyWallpaperService extends WallpaperService {
         public void onSurfaceDestroyed(SurfaceHolder holder) {
             myLog("onSurfaceDestroyed");
             super.onSurfaceDestroyed(holder);
-
             if (mThread != null) {
-                mThread.pause();
+                mThread.onDestroy();
                 mThread = null;
-            }
-            if (mRenderer != null) {
-                mRenderer.onDispose();
-                mRenderer = null;
             }
         }
 
@@ -106,26 +98,40 @@ public class MyWallpaperService extends WallpaperService {
 
     class MyThread extends Thread {
 
-        private static final int INTERVAL = 50;
+        private static final int DRAW_INTERVAL = 50;
+        private static final int WAIT_INTERVAL = 500;
 
-        private MyRenderer  mRenderer = null;
-        private boolean     mLoop = false;
+        private SurfaceHolder mHolder;
+        private int mWindowWidth;
+        private int mWindowHeight;
+        private boolean mLoop;
+        private boolean mPause;
 
-        public MyThread(MyRenderer renderer) {
-            mRenderer = renderer;
+        public MyThread(SurfaceHolder holder) {
+            mHolder = holder;
         }
 
         @Override
         public void run() {
-            long tm = System.currentTimeMillis();
-            mLoop = true;
-
             myLog("Thread loop start");
-            mRenderer.onStartDrawing();
+            MyRenderer renderer = new MyRenderer();
+            renderer.onStartDrawing(MyWallpaperService.this, mHolder);
+            long tm = System.currentTimeMillis();
+            boolean stopped = false;
+            mLoop = true;
+            mPause = false;
             while (mLoop) {
-                mRenderer.onDrawFrame();
-
-                tm += INTERVAL;
+                if (mPause) {
+                    stopped = true;
+                    tm += WAIT_INTERVAL;
+                } else {
+                    if (stopped) {
+                        renderer.onResumeDrawing();
+                        stopped = false;
+                    }
+                    renderer.onDrawFrame(mWindowWidth, mWindowHeight);
+                    tm += DRAW_INTERVAL;
+                }
                 long wait = tm - System.currentTimeMillis();
                 if (wait > 0) {
                     try {
@@ -138,11 +144,24 @@ public class MyWallpaperService extends WallpaperService {
                     tm -= wait;
                 }
             }
-            mRenderer.onFinishDrawing();
+            renderer.onFinishDrawing();
             myLog("Thread loop end");
         }
 
-        public void pause() {
+        public void setSize(int width, int height) {
+            mWindowWidth = width;
+            mWindowHeight = height;
+        }
+
+        public void onPause() {
+            mPause = true;
+        }
+
+        public void onResume() {
+            mPause = false;
+        }
+
+        public void onDestroy() {
             synchronized(this) {
                 mLoop = false;
             }
